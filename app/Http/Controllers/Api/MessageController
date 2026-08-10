@@ -1,0 +1,120 @@
+<?php
+
+namespace App\Http\Controllers\Api;
+
+use App\Http\Controllers\Controller;
+use App\Models\Message;
+use App\Models\User;
+use App\Models\Case;
+use App\Models\Notification;
+use Illuminate\Http\Request;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Validator;
+
+class MessageController extends Controller
+{
+    public function thread($peerId, Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $peer = User::find($peerId);
+
+        if (!$peer) {
+            return response()->json(['error' => 'User not found'], 404);
+        }
+
+        if ($user->id === $peer->id) {
+            return response()->json(['error' => 'Cannot message yourself'], 400);
+        }
+
+        // Check permissions
+        $staffRoles = ['admin', 'lawyer', 'consultant'];
+        $allowed = in_array($user->role, $staffRoles) || $peer->role === 'admin' ||
+            ($user->role === 'client' && in_array($peer->role, ['lawyer', 'consultant']) &&
+                Case::where('client_id', $user->id)
+                    ->where(function ($q) use ($peer) {
+                        $q->where('lawyer_id', $peer->id)->orWhere('consultant_id', $peer->id);
+                    })->exists());
+
+        if (!$allowed) {
+            return response()->json(['error' => 'Unauthorized'], 403);
+        }
+
+        $messages = Message::where(function ($q) use ($user, $peerId) {
+            $q->where('sender_id', $user->id)->where('recipient_id', $peerId);
+        })->orWhere(function ($q) use ($user, $peerId) {
+            $q->where('sender_id', $peerId)->where('recipient_id', $user->id);
+        })->orderBy('created_at')->limit(200)->get();
+
+        // Mark as read
+        Message::where('sender_id', $peerId)->where('recipient_id', $user->id)
+            ->update(['is_read' => 'yes']);
+
+        return response()->json($messages);
+    }
+
+    public function send(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        $validator = Validator::make($request->all(), [
+            'recipient_id' => 'required|exists:users,id',
+            'body' => 'required|string|min:1|max:5000',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['errors' => $validator->errors()], 422);
+        }
+
+        $recipient = User::find($request->recipient_id);
+        if (!$recipient) {
+            return response()->json(['error' => 'Recipient not found'], 404);
+        }
+
+        if ($recipient->id === $user->id) {
+            return response()->json(['error' => 'Cannot message yourself'], 400);
+        }
+
+        // Check permissions
+        $staffRoles = ['admin', 'lawyer', 'consultant'];
+        $allowed = in_array($user->role, $staffRoles) || $recipient->role === 'admin' ||
+            ($user->role === 'client' && in_array($recipient->role, ['lawyer', 'consultant']) &&
+                Case::where('client_id', $user->id)
+                    ->where(function ($q) use ($recipient) {
+                        $q->where('lawyer_id', $recipient->id)->orWhere('consultant_id', $recipient->id);
+                    })->exists());
+
+        if (!$allowed) {
+            return response()->json(['error' => 'Unauthorized'], 403);
+        }
+
+        $message = Message::create([
+            'sender_id' => $user->id,
+            'recipient_id' => $request->recipient_id,
+            'body' => $request->body,
+        ]);
+
+        Notification::create([
+            'recipient_id' => $request->recipient_id,
+            'recipient_role' => $recipient->role,
+            'title' => 'رسالة جديدة من ' . ($user->name ?? $user->email),
+            'message' => substr($request->body, 0, 200),
+            'type' => 'info',
+        ]);
+
+        return response()->json(['id' => $message->id], 201);
+    }
+
+    public function contacts(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $query = User::where('status', 'active')->where('id', '!=', $user->id);
+
+        if ($user->role === 'admin') {
+            // All active users
+        } elseif ($user->role === 'client') {
+            $query->whereIn('role', ['lawyer', 'consultant', 'admin']);
+        }
+
+        return response()->json($query->get(['id', 'name', 'email', 'role']));
+    }
+}

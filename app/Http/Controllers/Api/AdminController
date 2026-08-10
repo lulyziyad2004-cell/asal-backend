@@ -1,0 +1,81 @@
+<?php
+
+namespace App\Http\Controllers\Api;
+
+use App\Http\Controllers\Controller;
+use App\Models\User;
+use App\Models\Case;
+use App\Models\Hearing;
+use App\Models\Document;
+use App\Models\Message;
+use App\Models\Transaction;
+use App\Models\AuditLog;
+use App\Models\Subscription;
+use Illuminate\Http\Request;
+use Illuminate\Http\JsonResponse;
+
+class AdminController extends Controller
+{
+    public function stats(Request $request): JsonResponse
+    {
+        return response()->json([
+            'total_users' => User::count(),
+            'total_clients' => User::where('role', 'client')->count(),
+            'total_lawyers' => User::where('role', 'lawyer')->count(),
+            'total_consultants' => User::where('role', 'consultant')->count(),
+            'open_cases' => Case::where('status', 'open')->count(),
+            'in_progress_cases' => Case::where('status', 'in_progress')->count(),
+            'total_documents' => Document::count(),
+            'unread_messages' => Message::where('is_read', 'no')->count(),
+            'total_revenue' => Transaction::where('status', 'captured')->sum('amount'),
+        ]);
+    }
+
+    public function users(Request $request): JsonResponse
+    {
+        $users = User::when($request->role, function ($q) use ($request) {
+            return $q->where('role', $request->role);
+        })->get();
+
+        return response()->json($users);
+    }
+
+    public function disableUser($id, Request $request): JsonResponse
+    {
+        $user = User::find($id);
+        if (!$user) {
+            return response()->json(['error' => 'User not found'], 404);
+        }
+
+        $user->update(['status' => 'suspended']);
+
+        AuditLog::create([
+            'actor_id' => $request->user()->id,
+            'actor_role' => $request->user()->role,
+            'action' => 'user.disable',
+            'target_type' => 'user',
+            'target_id' => $user->id,
+            'ip_address' => $request->ip(),
+        ]);
+
+        return response()->json(['message' => 'User disabled successfully']);
+    }
+
+    public function auditLogs(Request $request): JsonResponse
+    {
+        $logs = AuditLog::latest()->limit(100)->get();
+        return response()->json($logs);
+    }
+
+    public function transactions(Request $request): JsonResponse
+    {
+        $transactions = Transaction::latest()->get();
+        return response()->json($transactions);
+    }
+
+    public function subscriptions(Request $request): JsonResponse
+    {
+        $subscriptions = Subscription::latest()->get();
+        return response()->json($subscriptions);
+    }
+}

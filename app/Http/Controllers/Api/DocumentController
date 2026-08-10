@@ -1,0 +1,118 @@
+<?php
+
+namespace App\Http\Controllers\Api;
+
+use App\Http\Controllers\Controller;
+use App\Models\Document;
+use App\Models\Case;
+use App\Models\AuditLog;
+use Illuminate\Http\Request;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Validator;
+
+class DocumentController extends Controller
+{
+    public function index(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $query = Document::query();
+
+        if ($user->role === 'admin') {
+            // All documents
+        } elseif ($request->has('case_id')) {
+            $case = Case::find($request->case_id);
+            if (!$case) {
+                return response()->json(['error' => 'Case not found'], 404);
+            }
+            if ($case->client_id !== $user->id && $case->lawyer_id !== $user->id && $case->consultant_id !== $user->id) {
+                return response()->json(['error' => 'Unauthorized'], 403);
+            }
+            $query->where('case_id', $request->case_id);
+        } else {
+            $query->where('uploader_id', $user->id);
+        }
+
+        return response()->json($query->latest()->get());
+    }
+
+    public function store(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        $validator = Validator::make($request->all(), [
+            'title' => 'required|string|min:2|max:255',
+            'category' => 'nullable|in:contract,memo,poa,hearing_related,other',
+            'case_id' => 'nullable|exists:cases,id',
+            'file_name' => 'required|string|max:255',
+            'file_url' => 'required|string|max:1024',
+            'file_key' => 'required|string|max:512',
+            'mime_type' => 'nullable|string|max:128',
+            'size_bytes' => 'nullable|integer',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['errors' => $validator->errors()], 422);
+        }
+
+        if ($request->case_id) {
+            $case = Case::find($request->case_id);
+            if (!$case) {
+                return response()->json(['error' => 'Case not found'], 404);
+            }
+            if ($user->role !== 'admin' && $case->client_id !== $user->id && $case->lawyer_id !== $user->id && $case->consultant_id !== $user->id) {
+                return response()->json(['error' => 'Unauthorized'], 403);
+            }
+        }
+
+        $document = Document::create([
+            'title' => $request->title,
+            'category' => $request->category ?? 'other',
+            'case_id' => $request->case_id,
+            'uploader_id' => $user->id,
+            'uploader_role' => $user->role,
+            'file_name' => $request->file_name,
+            'file_url' => $request->file_url,
+            'file_key' => $request->file_key,
+            'mime_type' => $request->mime_type,
+            'size_bytes' => $request->size_bytes,
+        ]);
+
+        AuditLog::create([
+            'actor_id' => $user->id,
+            'actor_role' => $user->role,
+            'action' => 'document.upload',
+            'target_type' => 'document',
+            'target_id' => $document->id,
+            'details' => $request->file_name,
+            'ip_address' => $request->ip(),
+        ]);
+
+        return response()->json(['id' => $document->id], 201);
+    }
+
+    public function destroy($id, Request $request): JsonResponse
+    {
+        $document = Document::find($id);
+        if (!$document) {
+            return response()->json(['error' => 'Document not found'], 404);
+        }
+
+        $user = $request->user();
+        if ($user->role !== 'admin' && $document->uploader_id !== $user->id) {
+            return response()->json(['error' => 'Unauthorized'], 403);
+        }
+
+        $document->delete();
+
+        AuditLog::create([
+            'actor_id' => $user->id,
+            'actor_role' => $user->role,
+            'action' => 'document.delete',
+            'target_type' => 'document',
+            'target_id' => $id,
+            'ip_address' => $request->ip(),
+        ]);
+
+        return response()->json(['message' => 'Document deleted successfully']);
+    }
+}

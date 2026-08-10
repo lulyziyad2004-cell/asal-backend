@@ -1,0 +1,139 @@
+<?php
+
+namespace App\Http\Controllers\Api;
+
+use App\Http\Controllers\Controller;
+use App\Models\Hearing;
+use App\Models\LegalCase;
+use App\Models\AuditLog;
+use Illuminate\Http\Request;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Validator;
+
+class HearingController extends Controller
+{
+    public function index(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $query = Hearing::query();
+
+        if ($user->role === 'admin') {
+            // All hearings
+        } elseif ($user->role === 'lawyer') {
+            $query->where('assigned_lawyer_id', $user->id);
+        } else {
+            // Get hearings for their cases
+            $caseIds = LegalCase::where('client_id', $user->id)->pluck('id');
+            $query->whereIn('case_id', $caseIds);
+        }
+
+        if ($request->has('case_id')) {
+            $query->where('case_id', $request->case_id);
+        }
+
+        return response()->json($query->orderBy('scheduled_at')->get());
+    }
+
+    public function store(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        if (!in_array($user->role, ['admin', 'lawyer', 'consultant'])) {
+            return response()->json(['error' => 'Unauthorized'], 403);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'case_id' => 'required|exists:cases,id',
+            'title' => 'required|string|min:2|max:255',
+            'court' => 'nullable|string|max:255',
+            'city' => 'nullable|string|max:128',
+            'circuit_number' => 'nullable|string|max:64',
+            'scheduled_at' => 'nullable|date',
+            'defense_notes' => 'nullable|string',
+            'requirements' => 'nullable|string',
+            'assigned_lawyer_id' => 'nullable|exists:users,id',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['errors' => $validator->errors()], 422);
+        }
+
+        $hearing = Hearing::create($validator->validated());
+
+        AuditLog::create([
+            'actor_id' => $user->id,
+            'actor_role' => $user->role,
+            'action' => 'hearing.create',
+            'target_type' => 'hearing',
+            'target_id' => $hearing->id,
+            'details' => $request->title,
+            'ip_address' => $request->ip(),
+        ]);
+
+        return response()->json(['id' => $hearing->id], 201);
+    }
+
+    public function update($id, Request $request): JsonResponse
+    {
+        $hearing = Hearing::find($id);
+        if (!$hearing) {
+            return response()->json(['error' => 'Hearing not found'], 404);
+        }
+
+        $user = $request->user();
+        if (!in_array($user->role, ['admin', 'lawyer', 'consultant'])) {
+            return response()->json(['error' => 'Unauthorized'], 403);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'status' => 'nullable|in:scheduled,postponed,done,cancelled',
+            'title' => 'nullable|string|min:2|max:255',
+            'defense_notes' => 'nullable|string',
+            'requirements' => 'nullable|string',
+            'scheduled_at' => 'nullable|date',
+            'assigned_lawyer_id' => 'nullable|exists:users,id',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['errors' => $validator->errors()], 422);
+        }
+
+        $hearing->update($validator->validated());
+
+        AuditLog::create([
+            'actor_id' => $user->id,
+            'actor_role' => $user->role,
+            'action' => 'hearing.update',
+            'target_type' => 'hearing',
+            'target_id' => $hearing->id,
+            'ip_address' => $request->ip(),
+        ]);
+
+        return response()->json(['message' => 'Hearing updated successfully']);
+    }
+
+    public function destroy($id, Request $request): JsonResponse
+    {
+        $hearing = Hearing::find($id);
+        if (!$hearing) {
+            return response()->json(['error' => 'Hearing not found'], 404);
+        }
+
+        $user = $request->user();
+        if (!in_array($user->role, ['admin', 'lawyer', 'consultant'])) {
+            return response()->json(['error' => 'Unauthorized'], 403);
+        }
+
+        $hearing->delete();
+
+        AuditLog::create([
+            'actor_id' => $user->id,
+            'actor_role' => $user->role,
+            'action' => 'hearing.delete',
+            'target_type' => 'hearing',
+            'target_id' => $id,
+            'ip_address' => $request->ip(),
+        ]);
+
+        return response()->json(['message' => 'Hearing deleted successfully']);
+    }
+}
