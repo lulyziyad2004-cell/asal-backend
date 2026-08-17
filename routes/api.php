@@ -12,7 +12,23 @@ use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\MessageController;
 use App\Http\Controllers\Api\SubscriptionController;
 use App\Http\Controllers\Api\AdminController;
+// CORS Preflight OPTIONS handler
+Route::options('/{any}', function (Request $request) {
+    $origin = $request->header('Origin');
+    $allowedOrigins = ['https://asal-frontend-coral.vercel.app'];
 
+    $headers = [
+        'Access-Control-Allow-Methods' => 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
+        'Access-Control-Allow-Headers' => 'Content-Type, Authorization, X-Requested-With, Accept, Origin',
+        'Access-Control-Allow-Credentials' => 'true',
+    ];
+
+    if ($origin && in_array($origin, $allowedOrigins, true)) {
+        $headers['Access-Control-Allow-Origin'] = $origin;
+    }
+
+    return response('', 200, $headers);
+})->where('any', '.*');
 // Public routes
 Route::post('/auth/register', [AuthController::class, 'register']);
 Route::post('/auth/login', [AuthController::class, 'login']);
