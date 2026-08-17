@@ -11,7 +11,8 @@ RUN apt-get update && apt-get install -y \
     libxml2-dev \
     zip \
     unzip \
-    default-mysql-client
+    default-mysql-client \
+    && rm -rf /var/lib/apt/lists/*
 
 # Install PHP extensions
 RUN docker-php-ext-install pdo pdo_mysql mbstring exif pcntl bcmath gd
@@ -22,15 +23,12 @@ COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 # Copy application
 COPY . .
 
-# Install dependencies
-RUN composer install --optimize-autoloader --no-dev
-
-# Generate key
-RUN APP_KEY
+# Install Laravel dependencies
+RUN composer install --optimize-autoloader --no-dev --no-interaction
 
 # Set permissions
-RUN chown -R www-data:www-data /app
+RUN chown -R www-data:www-data /app/storage /app/bootstrap/cache
 
 EXPOSE 8000
 
-CMD ["php", "artisan", "serve", "--host=0.0.0.0"]
+CMD ["php", "artisan", "serve", "--host=0.0.0.0", "--port=8000"]
