@@ -1,8 +1,10 @@
 <?php
+
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Request;
+
 return Application::configure(basePath: dirname(_DIR_))
     ->withRouting(
         web: _DIR_.'/../routes/web.php',
@@ -12,6 +14,7 @@ return Application::configure(basePath: dirname(_DIR_))
     )
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->append(\Illuminate\Http\Middleware\HandleCors::class);
+
         $middleware->alias([
             'admin' => \App\Http\Middleware\AdminMiddleware::class,
             'role' => \App\Http\Middleware\RoleMiddleware::class,
@@ -21,4 +24,5 @@ return Application::configure(basePath: dirname(_DIR_))
         $exceptions->shouldRenderJsonWhen(
             fn (Request $request) => $request->is('api/*'),
         );
-    })->create();
+    })
+    ->create();
