@@ -7,9 +7,9 @@ use Illuminate\Http\Request;
 
 return Application::configure(basePath: dirname(_DIR_))
     ->withRouting(
-        web: _DIR_.'/../routes/web.php',
-        api: _DIR_.'/../routes/api.php',
-        commands: _DIR_.'/../routes/console.php',
+        web: _ _DIR_ _.'/../routes/web.php',
+        api: _ _DIR_ _.'/../routes/api.php',
+        commands:_ _DIR_ _.'/../routes/console.php',
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
