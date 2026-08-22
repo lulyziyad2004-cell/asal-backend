@@ -1,3 +1,4 @@
+```dockerfile
 FROM php:8.2-cli
 
 WORKDIR /app
@@ -54,4 +55,5 @@ RUN chmod -R 775 storage bootstrap/cache database
 
 EXPOSE 10000
 
-CMD ["sh", "-c", "php artisan migrate --force && php artisan db:seed --force && php artisan serve --host=0.0.0.0 --port=${PORT:-10000}"]
+CMD ["sh", "-c", "php artisan migrate --force && php artisan db:seed --force && php -d upload_max_filesize=50M -d post_max_size=60M -d max_execution_time=300 -d max_input_time=300 artisan serve --host=0.0.0.0 --port=${PORT:-10000}"]
+```
