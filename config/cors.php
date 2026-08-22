@@ -5,7 +5,10 @@ return [
 
     'allowed_methods' => ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
 
-    'allowed_origins' => ['https://asal-frontend-coral.vercel.app'],
+    'allowed_origins' => [
+        'https://asal-final.vercel.app',
+        'https://asal-frontend-coral.vercel.app',
+    ],
 
     'allowed_origins_patterns' => [],
 
