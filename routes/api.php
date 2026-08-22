@@ -57,7 +57,6 @@ Route::get('/subscriptions/plans', [SubscriptionController::class, 'plans']);
 |--------------------------------------------------------------------------
 */
 
-Route::get('/stats', [AdminController::class, 'stats']);
 
 Route::middleware('auth:sanctum')->group(function () {
     // Statistics
