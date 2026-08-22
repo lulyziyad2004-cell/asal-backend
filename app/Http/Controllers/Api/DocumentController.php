@@ -88,7 +88,7 @@ class DocumentController extends Controller
                 $uploadedFile,
                 Str::random(16) . '_' . $sanitizedName
             );
-            $fileUrl = route('documents.download', ['id' => $document->id ?? 0]);
+            $fileUrl = null;
             $mimeType = $uploadedFile->getClientMimeType() ?: 'application/octet-stream';
             $sizeBytes = $uploadedFile->getSize();
             $fileName = $originalName;
@@ -104,7 +104,7 @@ class DocumentController extends Controller
             $sanitizedName = $this->sanitizeFileName($fileName);
             $fileKey = 'documents/' . date('Y/m') . '/' . Str::random(16) . '_' . $sanitizedName;
             Storage::disk('b2')->put($fileKey, $decodedData);
-            $fileUrl = route('documents.download', ['id' => $document->id ?? 0]);
+            $fileUrl = null;
             $sizeBytes = strlen($decodedData);
         }
 
