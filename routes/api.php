@@ -147,6 +147,11 @@ Route::middleware('auth:sanctum')->group(function () {
     |--------------------------------------------------------------------------
     */
 
+    Route::get(
+        '/documents/{id}/download',
+        [DocumentController::class, 'download']
+    )->name('documents.download');
+
     Route::apiResource('documents', DocumentController::class)
         ->only([
             'index',

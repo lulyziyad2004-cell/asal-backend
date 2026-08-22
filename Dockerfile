@@ -27,6 +27,13 @@ COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
 COPY . .
 
+RUN composer update league/flysystem-aws-s3-v3 \
+    --with-dependencies \
+    --no-dev \
+    --no-interaction \
+    --prefer-dist \
+    --no-scripts
+
 RUN composer install \
     --no-dev \
     --no-interaction \

@@ -83,12 +83,12 @@ class DocumentController extends Controller
             $uploadedFile = $request->file('file');
             $originalName = $uploadedFile->getClientOriginalName();
             $sanitizedName = $this->sanitizeFileName($originalName);
-            $fileKey = Storage::disk('public')->putFileAs(
+            $fileKey = Storage::disk('b2')->putFileAs(
                 'documents/' . date('Y/m'),
                 $uploadedFile,
                 Str::random(16) . '_' . $sanitizedName
             );
-            $fileUrl = Storage::disk('public')->url($fileKey);
+            $fileUrl = route('documents.download', ['id' => $document->id ?? 0]);
             $mimeType = $uploadedFile->getClientMimeType() ?: 'application/octet-stream';
             $sizeBytes = $uploadedFile->getSize();
             $fileName = $originalName;
@@ -103,8 +103,8 @@ class DocumentController extends Controller
             $mimeType = $request->input('mime_type', $this->extractMimeTypeFromData($rawData) ?? 'application/octet-stream');
             $sanitizedName = $this->sanitizeFileName($fileName);
             $fileKey = 'documents/' . date('Y/m') . '/' . Str::random(16) . '_' . $sanitizedName;
-            Storage::disk('public')->put($fileKey, $decodedData);
-            $fileUrl = Storage::disk('public')->url($fileKey);
+            Storage::disk('b2')->put($fileKey, $decodedData);
+            $fileUrl = route('documents.download', ['id' => $document->id ?? 0]);
             $sizeBytes = strlen($decodedData);
         }
 
@@ -122,6 +122,10 @@ class DocumentController extends Controller
             'size_bytes' => $sizeBytes,
         ]);
 
+        $document->update([
+            'file_url' => route('documents.download', ['id' => $document->id]),
+        ]);
+
         AuditLog::create([
             'actor_id' => $user->id,
             'actor_role' => $user->role,
@@ -133,6 +137,52 @@ class DocumentController extends Controller
         ]);
 
         return response()->json(['id' => $document->id], 201);
+    }
+
+
+    public function download($id, Request $request)
+    {
+        $document = Document::find($id);
+
+        if (!$document) {
+            return response()->json(['error' => 'Document not found'], 404);
+        }
+
+        $user = $request->user();
+
+        if ($user->role !== 'admin') {
+            $allowed = $document->uploader_id === $user->id;
+
+            if (!$allowed && $document->case_id) {
+                $allowed = LegalCase::where('id', $document->case_id)
+                    ->where(function ($q) use ($user) {
+                        if ($user->role === 'lawyer') {
+                            $q->where('lawyer_id', $user->id);
+                        } elseif ($user->role === 'consultant') {
+                            $q->where('consultant_id', $user->id);
+                        } elseif ($user->role === 'client') {
+                            $q->where('client_id', $user->id);
+                        }
+                    })->exists();
+            }
+
+            if (!$allowed) {
+                return response()->json(['error' => 'Unauthorized'], 403);
+            }
+        }
+
+        if (!$document->file_key || !Storage::disk('b2')->exists($document->file_key)) {
+            return response()->json(['error' => 'File not found'], 404);
+        }
+
+        return Storage::disk('b2')->download(
+            $document->file_key,
+            $document->file_name,
+            [
+                'Content-Type' => $document->mime_type ?: 'application/octet-stream',
+                'Content-Disposition' => 'inline; filename="' . addslashes($document->file_name) . '"',
+            ]
+        );
     }
 
     public function destroy($id, Request $request): JsonResponse
@@ -164,8 +214,8 @@ class DocumentController extends Controller
             }
         }
 
-        if ($document->file_key && Storage::disk('public')->exists($document->file_key)) {
-            Storage::disk('public')->delete($document->file_key);
+        if ($document->file_key && Storage::disk('b2')->exists($document->file_key)) {
+            Storage::disk('b2')->delete($document->file_key);
         }
 
         $document->delete();
