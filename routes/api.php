@@ -49,6 +49,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/auth/set-password', [AuthController::class, 'setPassword'])
         ->middleware('admin');
 
+    // Statistics
+    // Frontend uses GET /api/stats
+    Route::get('/stats', [AdminController::class, 'stats']);
+
     // Cases
     Route::apiResource('cases', CaseController::class);
 
