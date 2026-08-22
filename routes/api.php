@@ -158,6 +158,8 @@ Route::middleware('auth:sanctum')->group(function () {
             'destroy',
         ]);
 
+    Route::post('/upload', [DocumentController::class, 'store']);
+
     /*
     |--------------------------------------------------------------------------
     | Notifications
