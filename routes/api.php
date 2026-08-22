@@ -12,10 +12,15 @@ use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\MessageController;
 use App\Http\Controllers\Api\SubscriptionController;
 use App\Http\Controllers\Api\AdminController;
+
 // CORS Preflight OPTIONS handler
 Route::options('/{any}', function (Request $request) {
     $origin = $request->header('Origin');
-    $allowedOrigins = ['https://asal-frontend-coral.vercel.app'];
+
+    $allowedOrigins = [
+        'https://asal-final.vercel.app',
+        'https://asal-frontend-coral.vercel.app',
+    ];
 
     $headers = [
         'Access-Control-Allow-Methods' => 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
@@ -29,6 +34,7 @@ Route::options('/{any}', function (Request $request) {
 
     return response('', 200, $headers);
 })->where('any', '.*');
+
 // Public routes
 Route::post('/auth/register', [AuthController::class, 'register']);
 Route::post('/auth/login', [AuthController::class, 'login']);
@@ -36,10 +42,12 @@ Route::get('/subscriptions/plans', [SubscriptionController::class, 'plans']);
 
 // Protected routes
 Route::middleware('auth:sanctum')->group(function () {
+
     // Auth
     Route::get('/auth/me', [AuthController::class, 'me']);
     Route::post('/auth/logout', [AuthController::class, 'logout']);
-    Route::post('/auth/set-password', [AuthController::class, 'setPassword'])->middleware('admin');
+    Route::post('/auth/set-password', [AuthController::class, 'setPassword'])
+        ->middleware('admin');
 
     // Cases
     Route::apiResource('cases', CaseController::class);
@@ -50,15 +58,18 @@ Route::middleware('auth:sanctum')->group(function () {
     // Invoices
     Route::apiResource('invoices', InvoiceController::class);
     Route::post('/invoices/{id}/cancel', [InvoiceController::class, 'cancel']);
-    Route::post('/invoices/{id}/refund', [InvoiceController::class, 'refund'])->middleware('admin');
+    Route::post('/invoices/{id}/refund', [InvoiceController::class, 'refund'])
+        ->middleware('admin');
 
     // Payments
     Route::post('/payments/create-session', [PaymentController::class, 'createSession']);
     Route::get('/payments/status/{invoiceId}', [PaymentController::class, 'status']);
-    Route::post('/payments/callback', [PaymentController::class, 'callback'])->withoutMiddleware('auth:sanctum');
+    Route::post('/payments/callback', [PaymentController::class, 'callback'])
+        ->withoutMiddleware('auth:sanctum');
 
     // Documents
-    Route::apiResource('documents', DocumentController::class)->only(['index', 'store', 'destroy']);
+    Route::apiResource('documents', DocumentController::class)
+        ->only(['index', 'store', 'destroy']);
 
     // Notifications
     Route::get('/notifications', [NotificationController::class, 'index']);
