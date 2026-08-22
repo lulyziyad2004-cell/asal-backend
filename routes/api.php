@@ -246,6 +246,11 @@ Route::middleware('auth:sanctum')->group(function () {
             [AdminController::class, 'users']
         );
 
+        Route::get(
+            '/users',
+            [AdminController::class, 'users']
+        );
+
         Route::post(
             '/admin/users/{id}/disable',
             [AdminController::class, 'disableUser']
