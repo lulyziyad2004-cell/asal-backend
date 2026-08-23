@@ -5,6 +5,8 @@ return [
     'paths' => [
         'api/*',
         'sanctum/csrf-cookie',
+        'upload',
+        'documents/*',
     ],
 
     'allowed_methods' => [
@@ -22,7 +24,11 @@ return [
         '*',
     ],
 
-    'exposed_headers' => [],
+    'exposed_headers' => [
+        'Content-Disposition',
+        'Content-Length',
+        'Content-Type',
+    ],
 
     'max_age' => 86400,
 
