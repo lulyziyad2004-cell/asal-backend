@@ -5,8 +5,6 @@ return [
     'paths' => [
         'api/*',
         'sanctum/csrf-cookie',
-        'upload',
-        'documents/*',
     ],
 
     'allowed_methods' => [
@@ -18,7 +16,9 @@ return [
         'https://asal-frontend-coral.vercel.app',
     ],
 
-    'allowed_origins_patterns' => [],
+    'allowed_origins_patterns' => [
+        '#^https://asal-final(?:-[a-z0-9-]+)?\.vercel\.app$#',
+    ],
 
     'allowed_headers' => [
         '*',
@@ -32,6 +32,6 @@ return [
 
     'max_age' => 86400,
 
-    'supports_credentials' => true,
+    'supports_credentials' => false,
 
 ];
