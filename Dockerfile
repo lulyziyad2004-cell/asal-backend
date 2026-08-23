@@ -12,6 +12,7 @@ RUN apt-get update && apt-get install -y \
     libxml2-dev \
     sqlite3 \
     libsqlite3-dev \
+    libzip-dev \
     && docker-php-ext-install \
     pdo \
     pdo_sqlite \
@@ -21,6 +22,7 @@ RUN apt-get update && apt-get install -y \
     pcntl \
     bcmath \
     gd \
+    zip \
     && rm -rf /var/lib/apt/lists/*
 
 RUN curl -sS https://getcomposer.org/installer | php -- \
@@ -28,6 +30,14 @@ RUN curl -sS https://getcomposer.org/installer | php -- \
     --filename=composer
 
 COPY composer.json composer.lock ./
+
+RUN composer update league/flysystem-aws-s3-v3 \
+    --with-dependencies \
+    --no-dev \
+    --no-interaction \
+    --prefer-dist \
+    --no-scripts \
+    --ignore-platform-req=ext-zip
 
 RUN composer install \
     --no-dev \
