@@ -1,5 +1,3 @@
-# DocumentController.php
-
 ```php
 <?php
 
@@ -14,29 +12,28 @@ use Throwable;
 
 class DocumentController extends Controller
 {
-    /**
-     * عرض المستندات.
-     */
     public function index(Request $request)
     {
         $user = $request->user();
 
-        $documents = Document::query()
-            ->where('uploader_id', $user->id)
+        $documents = Document::where('uploader_id', $user->id)
             ->latest('created_at')
             ->get();
 
         return response()->json($documents);
     }
 
-    /**
-     * رفع مستند جديد.
-     *
-     * POST /api/upload
-     */
     public function store(Request $request)
     {
         try {
+            $user = $request->user();
+
+            if (!$user) {
+                return response()->json([
+                    'message' => 'غير مصرح. يرجى تسجيل الدخول.',
+                ], 401);
+            }
+
             if (!$request->hasFile('file')) {
                 return response()->json([
                     'message' => 'لم يتم إرسال ملف.',
@@ -46,19 +43,11 @@ class DocumentController extends Controller
 
             $file = $request->file('file');
 
-            if (!$file->isValid()) {
+            if (!$file || !$file->isValid()) {
                 return response()->json([
                     'message' => 'الملف المرسل غير صالح.',
                     'error' => 'invalid_file',
                 ], 422);
-            }
-
-            $user = $request->user();
-
-            if (!$user) {
-                return response()->json([
-                    'message' => 'غير مصرح. يرجى تسجيل الدخول.',
-                ], 401);
             }
 
             $request->validate([
@@ -74,7 +63,8 @@ class DocumentController extends Controller
                 ],
                 'category' => [
                     'nullable',
-                    'in:contract,memo,poa,hearing_related,other',
+                    'string',
+                    'max:100',
                 ],
                 'case_id' => [
                     'nullable',
@@ -95,38 +85,67 @@ class DocumentController extends Controller
                 $safeName .= '.' . $extension;
             }
 
-            /*
-             * التخزين على public.
-             * لا نستخدم base64 ولا نضع Content-Type يدويًا.
-             */
             $fileKey = 'documents/' . $safeName;
 
-            $stored = Storage::disk('public')->putFileAs(
+            /*
+             * التخزين الحقيقي للمشروع: Backblaze B2
+             */
+            Storage::disk('b2')->putFileAs(
                 'documents',
                 $file,
                 $safeName
             );
 
-            if (!$stored) {
+            /*
+             * نتأكد أن الملف وصل إلى B2.
+             */
+            if (!Storage::disk('b2')->exists($fileKey)) {
                 return response()->json([
-                    'message' => 'تعذر حفظ الملف في التخزين.',
-                    'error' => 'storage_failed',
+                    'message' => 'تم إرسال الملف ولكن لم يتم العثور عليه في التخزين.',
+                    'error' => 'b2_storage_failed',
                 ], 500);
             }
 
-            $fileUrl = Storage::disk('public')->url($fileKey);
+            /*
+             * رابط الملف.
+             *
+             * AWS_URL / B2_ENDPOINT يتم ضبطهما من Environment.
+             * وإذا لم يوجد AWS_URL نستخدم endpoint + bucket + key.
+             */
+            $b2Url = env('AWS_URL');
 
+            if (!$b2Url) {
+                $b2Url = rtrim(
+                    env('B2_ENDPOINT', ''),
+                    '/'
+                ) . '/' . ltrim(
+                    env('B2_BUCKET', ''),
+                    '/'
+                );
+            }
+
+            $fileUrl = rtrim($b2Url, '/') . '/' . ltrim($fileKey, '/');
+
+            /*
+             * حفظ بيانات المستند في قاعدة البيانات.
+             */
             $document = Document::create([
                 'title' => $request->input('title') ?: $originalName,
                 'category' => $request->input('category') ?: 'other',
+
                 'case_id' => $request->input('case_id'),
                 'hearing_id' => $request->input('hearing_id'),
+
                 'uploader_id' => $user->id,
                 'uploader_role' => $user->role ?? 'client',
+
                 'file_name' => $originalName,
                 'file_key' => $fileKey,
                 'file_url' => $fileUrl,
-                'mime_type' => $file->getMimeType(),
+
+                'mime_type' => $file->getMimeType()
+                    ?: 'application/octet-stream',
+
                 'size_bytes' => $file->getSize(),
             ]);
 
@@ -137,28 +156,29 @@ class DocumentController extends Controller
 
         } catch (Throwable $e) {
 
+            /*
+             * إظهار السبب الحقيقي بدل رسالة 500 عامة.
+             */
             return response()->json([
-                'message' => 'فشل رفع الملف.',
+                'message' => 'فشل رفع الملف',
                 'error' => $e->getMessage(),
+                'type' => get_class($e),
             ], 500);
         }
     }
 
-    /**
-     * تحميل مستند.
-     */
     public function download(Request $request, $id)
     {
         try {
             $document = Document::findOrFail($id);
 
-            if (!Storage::disk('public')->exists($document->file_key)) {
+            if (!Storage::disk('b2')->exists($document->file_key)) {
                 return response()->json([
                     'message' => 'الملف غير موجود في التخزين.',
                 ], 404);
             }
 
-            return Storage::disk('public')->download(
+            return Storage::disk('b2')->download(
                 $document->file_key,
                 $document->file_name
             );
@@ -172,21 +192,18 @@ class DocumentController extends Controller
         }
     }
 
-    /**
-     * حذف مستند.
-     */
     public function destroy(Request $request, $id)
     {
         try {
             $document = Document::findOrFail($id);
 
-            if ($document->uploader_id !== $request->user()->id) {
+            if ((int) $document->uploader_id !== (int) $request->user()->id) {
                 return response()->json([
                     'message' => 'غير مصرح لك بحذف هذا الملف.',
                 ], 403);
             }
 
-            Storage::disk('public')->delete($document->file_key);
+            Storage::disk('b2')->delete($document->file_key);
 
             $document->delete();
 
