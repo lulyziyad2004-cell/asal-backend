@@ -1,6 +1,5 @@
 <?php
 
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
 use App\Http\Controllers\Api\AuthController;
@@ -16,45 +15,7 @@ use App\Http\Controllers\Api\AdminController;
 
 /*
 |--------------------------------------------------------------------------
-| CORS / Preflight
-|--------------------------------------------------------------------------
-*/
-
-Route::options('/{any}', function (Request $request) {
-
-    $origin = $request->header('Origin');
-
-    $allowedOrigins = [
-        'https://asal-final.vercel.app',
-        'https://asal-frontend-coral.vercel.app',
-    ];
-
-    $headers = [
-        'Access-Control-Allow-Methods' =>
-            'GET, POST, PUT, PATCH, DELETE, OPTIONS',
-
-        'Access-Control-Allow-Headers' =>
-            'Content-Type, Authorization, X-Requested-With, Accept, Origin',
-
-        'Access-Control-Allow-Credentials' =>
-            'true',
-
-        'Access-Control-Max-Age' =>
-            '86400',
-    ];
-
-    if ($origin && in_array($origin, $allowedOrigins, true)) {
-        $headers['Access-Control-Allow-Origin'] = $origin;
-    }
-
-    return response('', 204, $headers);
-
-})->where('any', '.*');
-
-
-/*
-|--------------------------------------------------------------------------
-| Public
+| Public Routes
 |--------------------------------------------------------------------------
 */
 
@@ -76,7 +37,7 @@ Route::get('/subscriptions/plans', [
 
 /*
 |--------------------------------------------------------------------------
-| Authenticated API
+| Authenticated API Routes
 |--------------------------------------------------------------------------
 */
 
@@ -122,7 +83,10 @@ Route::middleware('auth:sanctum')->group(function () {
     |--------------------------------------------------------------------------
     */
 
-    Route::apiResource('cases', CaseController::class);
+    Route::apiResource(
+        'cases',
+        CaseController::class
+    );
 
 
     /*
@@ -131,7 +95,10 @@ Route::middleware('auth:sanctum')->group(function () {
     |--------------------------------------------------------------------------
     */
 
-    Route::apiResource('hearings', HearingController::class);
+    Route::apiResource(
+        'hearings',
+        HearingController::class
+    );
 
     Route::get('/sessions', [
         HearingController::class,
@@ -145,7 +112,10 @@ Route::middleware('auth:sanctum')->group(function () {
     |--------------------------------------------------------------------------
     */
 
-    Route::apiResource('invoices', InvoiceController::class);
+    Route::apiResource(
+        'invoices',
+        InvoiceController::class
+    );
 
     Route::post('/invoices/{id}/cancel', [
         InvoiceController::class,
@@ -184,15 +154,6 @@ Route::middleware('auth:sanctum')->group(function () {
     |--------------------------------------------------------------------------
     | Documents / File Upload
     |--------------------------------------------------------------------------
-    |
-    | IMPORTANT:
-    | The frontend must send:
-    |
-    | POST /api/upload
-    | Content-Type: multipart/form-data
-    | Authorization: Bearer TOKEN
-    | file: <actual file>
-    |
     */
 
     Route::post('/upload', [
