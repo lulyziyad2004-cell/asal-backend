@@ -31,7 +31,7 @@ RUN curl -sS https://getcomposer.org/installer | php \
 
 COPY composer.json composer.lock ./
 
-# إصلاح composer.lock تلقائياً
+# إصلاح عدم تطابق composer.lock مع composer.json
 RUN composer update league/flysystem-aws-s3-v3 \
     --with-dependencies \
     --no-dev \
@@ -62,6 +62,7 @@ RUN touch database/database.sqlite
 
 RUN chmod -R 775 storage bootstrap/cache database
 
+# تنظيف كاش Laravel بدون تشغيل cache:clear
 RUN php artisan config:clear || true
 RUN php artisan route:clear || true
 RUN php artisan view:clear || true
