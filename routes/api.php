@@ -2,6 +2,7 @@
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
+
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\CaseController;
 use App\Http\Controllers\Api\HearingController;
@@ -15,11 +16,12 @@ use App\Http\Controllers\Api\AdminController;
 
 /*
 |--------------------------------------------------------------------------
-| CORS Preflight
+| CORS / Preflight
 |--------------------------------------------------------------------------
 */
 
 Route::options('/{any}', function (Request $request) {
+
     $origin = $request->header('Origin');
 
     $allowedOrigins = [
@@ -28,35 +30,53 @@ Route::options('/{any}', function (Request $request) {
     ];
 
     $headers = [
-        'Access-Control-Allow-Methods' => 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
-        'Access-Control-Allow-Headers' => 'Content-Type, Authorization, X-Requested-With, Accept, Origin',
-        'Access-Control-Allow-Credentials' => 'true',
+        'Access-Control-Allow-Methods' =>
+            'GET, POST, PUT, PATCH, DELETE, OPTIONS',
+
+        'Access-Control-Allow-Headers' =>
+            'Content-Type, Authorization, X-Requested-With, Accept, Origin',
+
+        'Access-Control-Allow-Credentials' =>
+            'true',
+
+        'Access-Control-Max-Age' =>
+            '86400',
     ];
 
     if ($origin && in_array($origin, $allowedOrigins, true)) {
         $headers['Access-Control-Allow-Origin'] = $origin;
     }
 
-    return response('', 200, $headers);
+    return response('', 204, $headers);
+
 })->where('any', '.*');
+
 
 /*
 |--------------------------------------------------------------------------
-| Public Routes
+| Public
 |--------------------------------------------------------------------------
 */
 
-Route::post('/auth/register', [AuthController::class, 'register']);
-Route::post('/auth/login', [AuthController::class, 'login']);
+Route::post('/auth/register', [
+    AuthController::class,
+    'register'
+]);
 
-Route::get(
-    '/subscriptions/plans',
-    [SubscriptionController::class, 'plans']
-);
+Route::post('/auth/login', [
+    AuthController::class,
+    'login'
+]);
+
+Route::get('/subscriptions/plans', [
+    SubscriptionController::class,
+    'plans'
+]);
+
 
 /*
 |--------------------------------------------------------------------------
-| Protected Routes
+| Authenticated API
 |--------------------------------------------------------------------------
 */
 
@@ -68,28 +88,33 @@ Route::middleware('auth:sanctum')->group(function () {
     |--------------------------------------------------------------------------
     */
 
-    Route::get('/auth/me', [AuthController::class, 'me']);
+    Route::get('/auth/me', [
+        AuthController::class,
+        'me'
+    ]);
 
-    Route::post(
-        '/auth/logout',
-        [AuthController::class, 'logout']
-    );
+    Route::post('/auth/logout', [
+        AuthController::class,
+        'logout'
+    ]);
 
-    Route::post(
-        '/auth/set-password',
-        [AuthController::class, 'setPassword']
-    )->middleware('admin');
+    Route::post('/auth/set-password', [
+        AuthController::class,
+        'setPassword'
+    ])->middleware('admin');
+
 
     /*
     |--------------------------------------------------------------------------
-    | Statistics
+    | Dashboard / Statistics
     |--------------------------------------------------------------------------
     */
 
-    Route::get(
-        '/stats',
-        [AdminController::class, 'stats']
-    );
+    Route::get('/stats', [
+        AdminController::class,
+        'stats'
+    ]);
+
 
     /*
     |--------------------------------------------------------------------------
@@ -97,10 +122,8 @@ Route::middleware('auth:sanctum')->group(function () {
     |--------------------------------------------------------------------------
     */
 
-    Route::apiResource(
-        'cases',
-        CaseController::class
-    );
+    Route::apiResource('cases', CaseController::class);
+
 
     /*
     |--------------------------------------------------------------------------
@@ -108,21 +131,13 @@ Route::middleware('auth:sanctum')->group(function () {
     |--------------------------------------------------------------------------
     */
 
-    Route::apiResource(
-        'hearings',
-        HearingController::class
-    );
+    Route::apiResource('hearings', HearingController::class);
 
-    /*
-    | Compatibility route:
-    | The currently deployed frontend may request /api/sessions.
-    | Use the same HearingController and data.
-    */
+    Route::get('/sessions', [
+        HearingController::class,
+        'index'
+    ]);
 
-    Route::get(
-        '/sessions',
-        [HearingController::class, 'index']
-    );
 
     /*
     |--------------------------------------------------------------------------
@@ -130,20 +145,18 @@ Route::middleware('auth:sanctum')->group(function () {
     |--------------------------------------------------------------------------
     */
 
-    Route::apiResource(
-        'invoices',
-        InvoiceController::class
-    );
+    Route::apiResource('invoices', InvoiceController::class);
 
-    Route::post(
-        '/invoices/{id}/cancel',
-        [InvoiceController::class, 'cancel']
-    );
+    Route::post('/invoices/{id}/cancel', [
+        InvoiceController::class,
+        'cancel'
+    ]);
 
-    Route::post(
-        '/invoices/{id}/refund',
-        [InvoiceController::class, 'refund']
-    )->middleware('admin');
+    Route::post('/invoices/{id}/refund', [
+        InvoiceController::class,
+        'refund'
+    ])->middleware('admin');
+
 
     /*
     |--------------------------------------------------------------------------
@@ -151,49 +164,62 @@ Route::middleware('auth:sanctum')->group(function () {
     |--------------------------------------------------------------------------
     */
 
-    Route::post(
-        '/payments/create-session',
-        [PaymentController::class, 'createSession']
-    );
-
-    Route::get(
-        '/payments/status/{invoiceId}',
-        [PaymentController::class, 'status']
-    );
-
-    Route::post(
-        '/payments/callback',
-        [PaymentController::class, 'callback']
-    )->withoutMiddleware('auth:sanctum');
-
-    /*
-    |--------------------------------------------------------------------------
-    | Documents
-    |--------------------------------------------------------------------------
-    */
-
-    Route::get(
-        '/documents/{id}/download',
-        [DocumentController::class, 'download']
-    )->name('documents.download');
-
-    Route::apiResource(
-        'documents',
-        DocumentController::class
-    )->only([
-        'index',
-        'store',
-        'destroy',
+    Route::post('/payments/create-session', [
+        PaymentController::class,
+        'createSession'
     ]);
 
+    Route::get('/payments/status/{invoiceId}', [
+        PaymentController::class,
+        'status'
+    ]);
+
+    Route::post('/payments/callback', [
+        PaymentController::class,
+        'callback'
+    ])->withoutMiddleware('auth:sanctum');
+
+
     /*
-    | Compatibility upload route
+    |--------------------------------------------------------------------------
+    | Documents / File Upload
+    |--------------------------------------------------------------------------
+    |
+    | IMPORTANT:
+    | The frontend must send:
+    |
+    | POST /api/upload
+    | Content-Type: multipart/form-data
+    | Authorization: Bearer TOKEN
+    | file: <actual file>
+    |
     */
 
-    Route::post(
-        '/upload',
-        [DocumentController::class, 'store']
-    );
+    Route::post('/upload', [
+        DocumentController::class,
+        'store'
+    ]);
+
+    Route::get('/documents/{id}/download', [
+        DocumentController::class,
+        'download'
+    ])->name('documents.download');
+
+    Route::get('/documents', [
+        DocumentController::class,
+        'index'
+    ]);
+
+    Route::post('/documents', [
+        DocumentController::class,
+        'store'
+    ]);
+
+    Route::delete('/documents/{id}', [
+        DocumentController::class,
+        'destroy'
+    ]);
+
 
     /*
     |--------------------------------------------------------------------------
@@ -201,20 +227,21 @@ Route::middleware('auth:sanctum')->group(function () {
     |--------------------------------------------------------------------------
     */
 
-    Route::get(
-        '/notifications',
-        [NotificationController::class, 'index']
-    );
+    Route::get('/notifications', [
+        NotificationController::class,
+        'index'
+    ]);
 
-    Route::post(
-        '/notifications/{id}/mark-read',
-        [NotificationController::class, 'markRead']
-    );
+    Route::post('/notifications/{id}/mark-read', [
+        NotificationController::class,
+        'markRead'
+    ]);
 
-    Route::delete(
-        '/notifications/{id}',
-        [NotificationController::class, 'destroy']
-    );
+    Route::delete('/notifications/{id}', [
+        NotificationController::class,
+        'destroy'
+    ]);
+
 
     /*
     |--------------------------------------------------------------------------
@@ -222,20 +249,21 @@ Route::middleware('auth:sanctum')->group(function () {
     |--------------------------------------------------------------------------
     */
 
-    Route::get(
-        '/messages/thread/{peerId}',
-        [MessageController::class, 'thread']
-    );
+    Route::get('/messages/thread/{peerId}', [
+        MessageController::class,
+        'thread'
+    ]);
 
-    Route::post(
-        '/messages/send',
-        [MessageController::class, 'send']
-    );
+    Route::post('/messages/send', [
+        MessageController::class,
+        'send'
+    ]);
 
-    Route::get(
-        '/messages/contacts',
-        [MessageController::class, 'contacts']
-    );
+    Route::get('/messages/contacts', [
+        MessageController::class,
+        'contacts'
+    ]);
+
 
     /*
     |--------------------------------------------------------------------------
@@ -243,25 +271,26 @@ Route::middleware('auth:sanctum')->group(function () {
     |--------------------------------------------------------------------------
     */
 
-    Route::get(
-        '/subscriptions/mine',
-        [SubscriptionController::class, 'mine']
-    );
+    Route::get('/subscriptions/mine', [
+        SubscriptionController::class,
+        'mine'
+    ]);
 
-    Route::get(
-        '/subscriptions/my-records',
-        [SubscriptionController::class, 'myRecords']
-    );
+    Route::get('/subscriptions/my-records', [
+        SubscriptionController::class,
+        'myRecords'
+    ]);
 
-    Route::post(
-        '/subscriptions/upgrade',
-        [SubscriptionController::class, 'upgrade']
-    );
+    Route::post('/subscriptions/upgrade', [
+        SubscriptionController::class,
+        'upgrade'
+    ]);
 
-    Route::post(
-        '/subscriptions/{id}/cancel',
-        [SubscriptionController::class, 'cancel']
-    );
+    Route::post('/subscriptions/{id}/cancel', [
+        SubscriptionController::class,
+        'cancel'
+    ]);
+
 
     /*
     |--------------------------------------------------------------------------
@@ -271,58 +300,54 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::middleware('admin')->group(function () {
 
-        Route::get(
-            '/admin/stats',
-            [AdminController::class, 'stats']
-        );
+        Route::get('/admin/stats', [
+            AdminController::class,
+            'stats'
+        ]);
 
-        Route::get(
-            '/admin/users',
-            [AdminController::class, 'users']
-        );
+        Route::get('/admin/users', [
+            AdminController::class,
+            'users'
+        ]);
 
-        /*
-        | The frontend currently uses /api/users?role=lawyer
-        */
+        Route::get('/users', [
+            AdminController::class,
+            'users'
+        ]);
 
-        Route::get(
-            '/users',
-            [AdminController::class, 'users']
-        );
+        Route::post('/admin/users/{id}/disable', [
+            AdminController::class,
+            'disableUser'
+        ]);
 
-        Route::post(
-            '/admin/users/{id}/disable',
-            [AdminController::class, 'disableUser']
-        );
+        Route::post('/admin/users/{id}/set-role', [
+            AdminController::class,
+            'setUserRole'
+        ]);
 
-        Route::post(
-            '/admin/users/{id}/set-role',
-            [AdminController::class, 'setUserRole']
-        );
+        Route::post('/admin/users/{id}/suspend', [
+            AdminController::class,
+            'suspendUser'
+        ]);
 
-        Route::post(
-            '/admin/users/{id}/suspend',
-            [AdminController::class, 'suspendUser']
-        );
+        Route::delete('/admin/users/{id}', [
+            AdminController::class,
+            'deleteUser'
+        ]);
 
-        Route::delete(
-            '/admin/users/{id}',
-            [AdminController::class, 'deleteUser']
-        );
+        Route::get('/admin/audit-logs', [
+            AdminController::class,
+            'auditLogs'
+        ]);
 
-        Route::get(
-            '/admin/audit-logs',
-            [AdminController::class, 'auditLogs']
-        );
+        Route::get('/admin/transactions', [
+            AdminController::class,
+            'transactions'
+        ]);
 
-        Route::get(
-            '/admin/transactions',
-            [AdminController::class, 'transactions']
-        );
-
-        Route::get(
-            '/admin/subscriptions',
-            [AdminController::class, 'subscriptions']
-        );
+        Route::get('/admin/subscriptions', [
+            AdminController::class,
+            'subscriptions'
+        ]);
     });
 });
