@@ -7,19 +7,25 @@ return [
         'sanctum/csrf-cookie',
     ],
 
-    'allowed_methods' => ['*'],
+    'allowed_methods' => [
+        '*',
+    ],
 
-    'allowed_origins' => ['*'],
+    'allowed_origins' => [
+        'https://asal-final.vercel.app',
+        'https://asal-frontend-coral.vercel.app',
+    ],
 
     'allowed_origins_patterns' => [],
 
-    'allowed_headers' => ['*'],
+    'allowed_headers' => [
+        '*',
+    ],
 
     'exposed_headers' => [],
 
     'max_age' => 86400,
 
-    // الرفع يستخدم Bearer Token وليس Cookies
-    'supports_credentials' => false,
+    'supports_credentials' => true,
 
 ];
