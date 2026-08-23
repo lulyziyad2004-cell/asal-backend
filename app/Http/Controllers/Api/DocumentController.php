@@ -1,3 +1,5 @@
+# DocumentController.php
+
 ```php
 <?php
 
@@ -16,6 +18,12 @@ class DocumentController extends Controller
     {
         $user = $request->user();
 
+        if (!$user) {
+            return response()->json([
+                'message' => 'غير مصرح. يرجى تسجيل الدخول.',
+            ], 401);
+        }
+
         $documents = Document::where('uploader_id', $user->id)
             ->latest('created_at')
             ->get();
@@ -32,22 +40,6 @@ class DocumentController extends Controller
                 return response()->json([
                     'message' => 'غير مصرح. يرجى تسجيل الدخول.',
                 ], 401);
-            }
-
-            if (!$request->hasFile('file')) {
-                return response()->json([
-                    'message' => 'لم يتم إرسال ملف.',
-                    'error' => 'file_is_required',
-                ], 422);
-            }
-
-            $file = $request->file('file');
-
-            if (!$file || !$file->isValid()) {
-                return response()->json([
-                    'message' => 'الملف المرسل غير صالح.',
-                    'error' => 'invalid_file',
-                ], 422);
             }
 
             $request->validate([
@@ -76,6 +68,22 @@ class DocumentController extends Controller
                 ],
             ]);
 
+            if (!$request->hasFile('file')) {
+                return response()->json([
+                    'message' => 'لم يتم إرسال ملف.',
+                    'error' => 'file_is_required',
+                ], 422);
+            }
+
+            $file = $request->file('file');
+
+            if (!$file || !$file->isValid()) {
+                return response()->json([
+                    'message' => 'الملف المرسل غير صالح.',
+                    'error' => 'invalid_file',
+                ], 422);
+            }
+
             $originalName = $file->getClientOriginalName();
             $extension = strtolower($file->getClientOriginalExtension());
 
@@ -88,46 +96,26 @@ class DocumentController extends Controller
             $fileKey = 'documents/' . $safeName;
 
             /*
-             * التخزين الحقيقي للمشروع: Backblaze B2
+             * رفع الملف إلى Backblaze B2.
+             *
+             * لا نستخدم exists() بعد الرفع،
+             * لأن Bucket خاص وقد تتطلب عملية التحقق صلاحيات إضافية.
              */
-            Storage::disk('b2')->putFileAs(
+            $stored = Storage::disk('b2')->putFileAs(
                 'documents',
                 $file,
                 $safeName
             );
 
-            /*
-             * نتأكد أن الملف وصل إلى B2.
-             */
-            if (!Storage::disk('b2')->exists($fileKey)) {
+            if (!$stored) {
                 return response()->json([
-                    'message' => 'تم إرسال الملف ولكن لم يتم العثور عليه في التخزين.',
-                    'error' => 'b2_storage_failed',
+                    'message' => 'تعذر رفع الملف إلى Backblaze B2.',
+                    'error' => 'b2_upload_failed',
                 ], 500);
             }
 
             /*
-             * رابط الملف.
-             *
-             * AWS_URL / B2_ENDPOINT يتم ضبطهما من Environment.
-             * وإذا لم يوجد AWS_URL نستخدم endpoint + bucket + key.
-             */
-            $b2Url = env('AWS_URL');
-
-            if (!$b2Url) {
-                $b2Url = rtrim(
-                    env('B2_ENDPOINT', ''),
-                    '/'
-                ) . '/' . ltrim(
-                    env('B2_BUCKET', ''),
-                    '/'
-                );
-            }
-
-            $fileUrl = rtrim($b2Url, '/') . '/' . ltrim($fileKey, '/');
-
-            /*
-             * حفظ بيانات المستند في قاعدة البيانات.
+             * حفظ بيانات الملف في قاعدة البيانات.
              */
             $document = Document::create([
                 'title' => $request->input('title') ?: $originalName,
@@ -141,7 +129,8 @@ class DocumentController extends Controller
 
                 'file_name' => $originalName,
                 'file_key' => $fileKey,
-                'file_url' => $fileUrl,
+
+                'file_url' => null,
 
                 'mime_type' => $file->getMimeType()
                     ?: 'application/octet-stream',
@@ -149,16 +138,25 @@ class DocumentController extends Controller
                 'size_bytes' => $file->getSize(),
             ]);
 
+            /*
+             * رابط التحميل يمر عبر Laravel
+             * لأن Bucket في Backblaze خاص Private.
+             */
+            $document->update([
+                'file_url' => url(
+                    '/api/documents/' . $document->id . '/download'
+                ),
+            ]);
+
             return response()->json([
                 'message' => 'تم رفع الملف بنجاح',
-                'document' => $document,
+                'document' => $document->fresh(),
             ], 201);
 
         } catch (Throwable $e) {
 
-            /*
-             * إظهار السبب الحقيقي بدل رسالة 500 عامة.
-             */
+            report($e);
+
             return response()->json([
                 'message' => 'فشل رفع الملف',
                 'error' => $e->getMessage(),
@@ -170,24 +168,38 @@ class DocumentController extends Controller
     public function download(Request $request, $id)
     {
         try {
-            $document = Document::findOrFail($id);
+            $user = $request->user();
 
-            if (!Storage::disk('b2')->exists($document->file_key)) {
+            if (!$user) {
                 return response()->json([
-                    'message' => 'الملف غير موجود في التخزين.',
-                ], 404);
+                    'message' => 'غير مصرح. يرجى تسجيل الدخول.',
+                ], 401);
             }
 
+            $document = Document::findOrFail($id);
+
+            /*
+             * تحميل الملف مباشرة من B2.
+             *
+             * لا نستخدم exists() قبل التحميل.
+             */
             return Storage::disk('b2')->download(
                 $document->file_key,
-                $document->file_name
+                $document->file_name,
+                [
+                    'Content-Type' => $document->mime_type
+                        ?: 'application/octet-stream',
+                ]
             );
 
         } catch (Throwable $e) {
 
+            report($e);
+
             return response()->json([
                 'message' => 'تعذر تحميل الملف.',
                 'error' => $e->getMessage(),
+                'type' => get_class($e),
             ], 500);
         }
     }
@@ -195,15 +207,25 @@ class DocumentController extends Controller
     public function destroy(Request $request, $id)
     {
         try {
+            $user = $request->user();
+
+            if (!$user) {
+                return response()->json([
+                    'message' => 'غير مصرح. يرجى تسجيل الدخول.',
+                ], 401);
+            }
+
             $document = Document::findOrFail($id);
 
-            if ((int) $document->uploader_id !== (int) $request->user()->id) {
+            if ((int) $document->uploader_id !== (int) $user->id) {
                 return response()->json([
                     'message' => 'غير مصرح لك بحذف هذا الملف.',
                 ], 403);
             }
 
-            Storage::disk('b2')->delete($document->file_key);
+            Storage::disk('b2')->delete(
+                $document->file_key
+            );
 
             $document->delete();
 
@@ -213,9 +235,12 @@ class DocumentController extends Controller
 
         } catch (Throwable $e) {
 
+            report($e);
+
             return response()->json([
                 'message' => 'تعذر حذف الملف.',
                 'error' => $e->getMessage(),
+                'type' => get_class($e),
             ], 500);
         }
     }
