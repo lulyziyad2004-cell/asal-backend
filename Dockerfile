@@ -31,14 +31,6 @@ RUN curl -sS https://getcomposer.org/installer | php \
 
 COPY composer.json composer.lock ./
 
-RUN composer update league/flysystem-aws-s3-v3 \
-    --with-dependencies \
-    --no-dev \
-    --no-interaction \
-    --prefer-dist \
-    --no-scripts \
-    --ignore-platform-req=ext-zip
-
 RUN composer install \
     --no-dev \
     --no-interaction \
@@ -50,22 +42,21 @@ RUN composer install \
 COPY . .
 
 RUN mkdir -p \
+    database \
     storage/framework/cache \
     storage/framework/sessions \
     storage/framework/views \
     storage/logs \
-    bootstrap/cache \
-    database
+    bootstrap/cache
+
+RUN touch database/database.sqlite
 
 RUN chmod -R 775 storage bootstrap/cache database
 
-# Clear ALL cached Laravel configuration/routes/views
-RUN php artisan optimize:clear || true
 RUN php artisan config:clear || true
-RUN php artisan cache:clear || true
 RUN php artisan route:clear || true
 RUN php artisan view:clear || true
 
 EXPOSE 10000
 
-CMD ["sh", "-c", "php artisan optimize:clear && php artisan migrate --force && php artisan db:seed --force && php -d upload_max_filesize=50M -d post_max_size=60M -d max_execution_time=300 -d max_input_time=300 artisan serve --host=0.0.0.0 --port=${PORT:-10000}"]
+CMD ["sh", "-c", "php artisan migrate --force && php artisan db:seed --force && php artisan config:clear && php artisan route:clear && php artisan view:clear && php -d upload_max_filesize=50M -d post_max_size=60M -d max_execution_time=300 -d max_input_time=300 artisan serve --host=0.0.0.0 --port=${PORT:-10000}"]
