@@ -29,9 +29,10 @@ RUN curl -sS https://getcomposer.org/installer | php \
     -- --install-dir=/usr/local/bin \
     --filename=composer
 
-COPY composer.json composer.lock ./
+# نستخدم composer.json فقط ونتجاهل composer.lock التالف
+COPY composer.json ./
 
-RUN composer install \
+RUN composer update \
     --no-dev \
     --no-interaction \
     --prefer-dist \
